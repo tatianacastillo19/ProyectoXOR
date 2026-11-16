@@ -65,8 +65,8 @@ export default function App() {
   const [prevBiases, setPrevBiases] = useState<NetworkBiases | null>(null);
 
   // Initial State Snapshot
-  const [initialWeights] = useState<NetworkWeights>(cloneWeights(INITIAL_WEIGHTS));
-  const [initialBiases] = useState<NetworkBiases>(cloneBiases(INITIAL_BIASES));
+  const [initialWeights, setInitialWeights] = useState<NetworkWeights>(cloneWeights(INITIAL_WEIGHTS));
+  const [initialBiases, setInitialBiases] = useState<NetworkBiases>(cloneBiases(INITIAL_BIASES));
 
   // Training state counters
   const [iteration, setIteration] = useState<number>(1);
@@ -423,11 +423,16 @@ export default function App() {
     completeCurrentIteration,
   ]);
 
-  // Reset to initial professor parameters
-  const handleReset = () => {
+  // Apply new initial parameters and restart training from them
+  const applyInitialParams = useCallback((nextWeights: NetworkWeights, nextBiases: NetworkBiases) => {
+    const w = cloneWeights(nextWeights);
+    const b = cloneBiases(nextBiases);
+
     setIsTraining(false);
-    setWeights(cloneWeights(INITIAL_WEIGHTS));
-    setBiases(cloneBiases(INITIAL_BIASES));
+    setInitialWeights(w);
+    setInitialBiases(b);
+    setWeights(cloneWeights(w));
+    setBiases(cloneBiases(b));
     setPrevWeights(null);
     setPrevBiases(null);
     setIteration(1);
@@ -435,21 +440,28 @@ export default function App() {
     setExampleIndex(0);
     setSubPhase('input_selection');
     setHistory([]);
+
+    const eval0 = calculateGlobalMSE(w, b);
     setEpochHistory([
       {
         epoch: 0,
-        mse: initialGlobalEval.mse,
-        weights: cloneWeights(INITIAL_WEIGHTS),
-        biases: cloneBiases(INITIAL_BIASES),
-        allOutputs: initialGlobalEval.evaluations.map((e) => ({
+        mse: eval0.mse,
+        weights: cloneWeights(w),
+        biases: cloneBiases(b),
+        allOutputs: eval0.evaluations.map((e) => ({
           exampleId: e.example.id,
           target: e.example.target,
           output: e.forward.o1,
           correct: e.correct,
         })),
-        allCorrect: initialGlobalEval.allCorrect,
+        allCorrect: eval0.allCorrect,
       },
     ]);
+  }, []);
+
+  // Reset to initial professor parameters
+  const handleReset = () => {
+    applyInitialParams(INITIAL_WEIGHTS, INITIAL_BIASES);
   };
 
   // Inspect past snapshot in the diagram
@@ -473,10 +485,13 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-wide flex items-center gap-2">
-                XOR Neural Lab <span className="text-blue-600 font-mono text-xs font-normal">MLP 2–2–1</span>
+                XOR Neural Lab
               </h1>
               <p className="text-[11px] text-slate-500 hidden sm:block">
                 Simulador Educativo Universitario de Redes Neuronales con Retropropagación y Método Sucesor
+              </p>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Autores: Tatiana Castillo, Nicolas Lagos y Madi Colina
               </p>
             </div>
           </div>
@@ -560,7 +575,10 @@ export default function App() {
             onConfigChange={setConfig}
             weights={weights}
             biases={biases}
+            initialWeights={initialWeights}
+            initialBiases={initialBiases}
             onResetWeights={handleReset}
+            onUpdateInitialParams={applyInitialParams}
             currentExample={currentExample}
             evaluations={currentGlobalEval.evaluations}
             isTraining={isTraining}
@@ -612,8 +630,6 @@ export default function App() {
           <ChartsSection
             epochHistory={epochHistory}
             iterationHistory={history}
-            weights={weights}
-            biases={biases}
             targetMSE={config.targetMSE}
           />
         </section>
@@ -655,12 +671,9 @@ export default function App() {
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-6 px-4 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="max-w-7xl mx-auto">
           <p>
-            XOR Neural Lab — Perceptrón Multicapa (MLP 2–2–1) para Inteligencia Artificial.
-          </p>
-          <p className="font-mono text-slate-500">
-            Sigmoide: σ(z) = 1/(1+e⁻ᶻ) | Backpropagation | Método Sucesor
+            XOR Neural Lab — Perceptrón Multicapa para inteligencia artificial. 2026-2. Ingeniería en Multimedia
           </p>
         </div>
       </footer>

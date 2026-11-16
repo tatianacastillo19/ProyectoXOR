@@ -11,8 +11,6 @@ import {
   XOR_DATASET,
   ORIGINAL_ORDER,
   PDF_DEMO_ORDER,
-  INITIAL_WEIGHTS,
-  INITIAL_BIASES,
   DEFAULT_LEARNING_RATE,
   DEFAULT_TARGET_MSE,
   DEFAULT_MAX_EPOCHS,
@@ -24,23 +22,103 @@ interface ConfigurationSectionProps {
   onConfigChange: (newConfig: TrainingConfig) => void;
   weights: NetworkWeights;
   biases: NetworkBiases;
+  initialWeights: NetworkWeights;
+  initialBiases: NetworkBiases;
   onResetWeights: () => void;
+  onUpdateInitialParams: (weights: NetworkWeights, biases: NetworkBiases) => void;
   currentExample?: XORExample | null;
   evaluations?: { example: XORExample; forward: ForwardResult; correct: boolean }[];
   isTraining: boolean;
 }
+
+type ParamDraft = {
+  w11: string;
+  w21: string;
+  w12: string;
+  w22: string;
+  wh1: string;
+  wh2: string;
+  bh1: string;
+  bh2: string;
+  bo1: string;
+};
+
+const toDraft = (w: NetworkWeights, b: NetworkBiases): ParamDraft => ({
+  w11: String(w.w11),
+  w21: String(w.w21),
+  w12: String(w.w12),
+  w22: String(w.w22),
+  wh1: String(w.wh1),
+  wh2: String(w.wh2),
+  bh1: String(b.bh1),
+  bh2: String(b.bh2),
+  bo1: String(b.bo1),
+});
+
+const ParamInput: React.FC<{
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  accent: string;
+}> = ({ label, value, onChange, accent }) => (
+  <label className="block">
+    <span className={`text-[10px] ${accent}`}>{label}</span>
+    <input
+      type="number"
+      step="0.01"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="mt-0.5 w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-center font-mono text-xs text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+    />
+  </label>
+);
 
 export const ConfigurationSection: React.FC<ConfigurationSectionProps> = ({
   config,
   onConfigChange,
   weights,
   biases,
+  initialWeights,
+  initialBiases,
   onResetWeights,
+  onUpdateInitialParams,
   currentExample,
   evaluations,
   isTraining,
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [draft, setDraft] = useState<ParamDraft>(() => toDraft(initialWeights, initialBiases));
+
+  const handleToggleAdvanced = () => {
+    if (!showAdvanced) {
+      setDraft(toDraft(initialWeights, initialBiases));
+    }
+    setShowAdvanced(!showAdvanced);
+  };
+
+  const handleApplyInitialParams = () => {
+    const toNumber = (value: string, fallback: number) => {
+      const parsed = parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    };
+
+    const newWeights: NetworkWeights = {
+      w11: toNumber(draft.w11, initialWeights.w11),
+      w21: toNumber(draft.w21, initialWeights.w21),
+      w12: toNumber(draft.w12, initialWeights.w12),
+      w22: toNumber(draft.w22, initialWeights.w22),
+      wh1: toNumber(draft.wh1, initialWeights.wh1),
+      wh2: toNumber(draft.wh2, initialWeights.wh2),
+    };
+    const newBiases: NetworkBiases = {
+      bh1: toNumber(draft.bh1, initialBiases.bh1),
+      bh2: toNumber(draft.bh2, initialBiases.bh2),
+      bo1: toNumber(draft.bo1, initialBiases.bo1),
+    };
+
+    onUpdateInitialParams(newWeights, newBiases);
+    setDraft(toDraft(newWeights, newBiases));
+  };
 
   const activeOrder = config.orderType === 'original' ? ORIGINAL_ORDER : PDF_DEMO_ORDER;
 
@@ -56,7 +134,7 @@ export const ConfigurationSection: React.FC<ConfigurationSectionProps> = ({
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowAdvanced(!showAdvanced)}
+            onClick={handleToggleAdvanced}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs text-slate-700 transition-colors border border-slate-200"
           >
             <Settings className="w-3.5 h-3.5 text-blue-600" />
@@ -94,18 +172,6 @@ export const ConfigurationSection: React.FC<ConfigurationSectionProps> = ({
                   }`}
                 >
                   Original (e1→e2→e3→e4)
-                </button>
-                <button
-                  onClick={() => onConfigChange({ ...config, orderType: 'pdf_demo' })}
-                  disabled={isTraining}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                    config.orderType === 'pdf_demo'
-                      ? 'bg-indigo-100 text-indigo-700 border border-indigo-300'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                  title="Orden del profesor: inicia con e1 y sigue inmediatamente con e3 (1,1)"
-                >
-                  Demostración PDF (e1→e3→e2→e4)
                 </button>
               </div>
             </div>
@@ -320,70 +386,97 @@ export const ConfigurationSection: React.FC<ConfigurationSectionProps> = ({
       {/* Advanced Collapsible: Edit Initial Weights & Biases */}
       {showAdvanced && (
         <div className="mt-4 p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 animate-fadeIn">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-700">
-              Matrices y Sesgos Iniciales (Valores teóricos requeridos)
-            </span>
-            <span className="text-[11px] text-amber-700">
-              * Nota: Los valores corresponden al ejercicio del profesor (Págs. 6–21).
-            </span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <span className="text-xs font-semibold text-slate-700">
+                Matrices y Sesgos Iniciales
+              </span>
+              <p className="text-[11px] text-slate-500">
+                Edita los valores y pulsa Aplicar. El entrenamiento se reiniciará con ellos.
+              </p>
+            </div>
+            <button
+              onClick={handleApplyInitialParams}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs font-semibold text-white transition-colors"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Aplicar y Reiniciar
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono">
             {/* W1 */}
-            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <div className="bg-white p-3 rounded-lg border border-slate-200">
               <span className="text-slate-500 block mb-1 text-[11px]">Matriz W₁ (2×2)</span>
-              <div className="grid grid-cols-2 gap-2 text-center">
-                <div>
-                  <span className="text-[10px] text-slate-500">w₁₁</span>
-                  <p className="text-blue-700 font-bold">{INITIAL_WEIGHTS.w11}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-500">w₁₂</span>
-                  <p className="text-blue-700 font-bold">{INITIAL_WEIGHTS.w12}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-500">w₂₁</span>
-                  <p className="text-blue-700 font-bold">{INITIAL_WEIGHTS.w21}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-500">w₂₂</span>
-                  <p className="text-blue-700 font-bold">{INITIAL_WEIGHTS.w22}</p>
-                </div>
+              <div className="grid grid-cols-2 gap-2">
+                <ParamInput
+                  label="w₁₁ (i₁→h₁)"
+                  value={draft.w11}
+                  onChange={(v) => setDraft({ ...draft, w11: v })}
+                  accent="text-blue-700"
+                />
+                <ParamInput
+                  label="w₁₂ (i₁→h₂)"
+                  value={draft.w12}
+                  onChange={(v) => setDraft({ ...draft, w12: v })}
+                  accent="text-blue-700"
+                />
+                <ParamInput
+                  label="w₂₁ (i₂→h₁)"
+                  value={draft.w21}
+                  onChange={(v) => setDraft({ ...draft, w21: v })}
+                  accent="text-blue-700"
+                />
+                <ParamInput
+                  label="w₂₂ (i₂→h₂)"
+                  value={draft.w22}
+                  onChange={(v) => setDraft({ ...draft, w22: v })}
+                  accent="text-blue-700"
+                />
               </div>
             </div>
 
             {/* W2 */}
-            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <div className="bg-white p-3 rounded-lg border border-slate-200">
               <span className="text-slate-500 block mb-1 text-[11px]">Matriz W₂ (2×1)</span>
-              <div className="grid grid-cols-2 gap-2 text-center">
-                <div>
-                  <span className="text-[10px] text-slate-500">w_h1o1</span>
-                  <p className="text-emerald-700 font-bold">{INITIAL_WEIGHTS.wh1}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-500">w_h2o1</span>
-                  <p className="text-emerald-700 font-bold">{INITIAL_WEIGHTS.wh2}</p>
-                </div>
+              <div className="grid grid-cols-2 gap-2">
+                <ParamInput
+                  label="w_h1o1 (h₁→o₁)"
+                  value={draft.wh1}
+                  onChange={(v) => setDraft({ ...draft, wh1: v })}
+                  accent="text-emerald-700"
+                />
+                <ParamInput
+                  label="w_h2o1 (h₂→o₁)"
+                  value={draft.wh2}
+                  onChange={(v) => setDraft({ ...draft, wh2: v })}
+                  accent="text-emerald-700"
+                />
               </div>
             </div>
 
             {/* Biases */}
-            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <div className="bg-white p-3 rounded-lg border border-slate-200">
               <span className="text-slate-500 block mb-1 text-[11px]">Sesgos Iniciales</span>
-              <div className="grid grid-cols-3 gap-1.5 text-center">
-                <div>
-                  <span className="text-[10px] text-slate-500">b_h1</span>
-                  <p className="text-indigo-700 font-bold">{INITIAL_BIASES.bh1}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-500">b_h2</span>
-                  <p className="text-indigo-700 font-bold">{INITIAL_BIASES.bh2}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-500">b_o1</span>
-                  <p className="text-emerald-700 font-bold">{INITIAL_BIASES.bo1}</p>
-                </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                <ParamInput
+                  label="b_h1"
+                  value={draft.bh1}
+                  onChange={(v) => setDraft({ ...draft, bh1: v })}
+                  accent="text-indigo-700"
+                />
+                <ParamInput
+                  label="b_h2"
+                  value={draft.bh2}
+                  onChange={(v) => setDraft({ ...draft, bh2: v })}
+                  accent="text-indigo-700"
+                />
+                <ParamInput
+                  label="b_o1"
+                  value={draft.bo1}
+                  onChange={(v) => setDraft({ ...draft, bo1: v })}
+                  accent="text-emerald-700"
+                />
               </div>
             </div>
           </div>

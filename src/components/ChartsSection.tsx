@@ -11,31 +11,23 @@ import {
   ReferenceLine,
 } from 'recharts';
 import {
-  NetworkWeights,
-  NetworkBiases,
   EpochRecord,
   IterationSnapshot,
 } from '../types/network';
-import { generateDecisionGrid } from '../lib/math';
-import { BarChart2, Activity, Grid, Info, Download, Layers } from 'lucide-react';
+import { BarChart2 } from 'lucide-react';
 
 interface ChartsSectionProps {
   epochHistory: EpochRecord[];
   iterationHistory: IterationSnapshot[];
-  weights: NetworkWeights;
-  biases: NetworkBiases;
   targetMSE: number;
 }
 
 export const ChartsSection: React.FC<ChartsSectionProps> = ({
   epochHistory,
   iterationHistory,
-  weights,
-  biases,
   targetMSE,
 }) => {
   const [selectedWeight, setSelectedWeight] = useState<string>('all');
-  const [resolution, setResolution] = useState<number>(35);
 
   // Format data for MSE chart (sample down if too many epochs to maintain high performance)
   const mseChartData = useMemo(() => {
@@ -113,11 +105,6 @@ export const ChartsSection: React.FC<ChartsSectionProps> = ({
 
     return sampled;
   }, [epochHistory, iterationHistory]);
-
-  // Real 2D Decision Grid calculated strictly from current network parameters
-  const decisionGrid = useMemo(() => {
-    return generateDecisionGrid(weights, biases, resolution);
-  }, [weights, biases, resolution]);
 
   const initialMSE = epochHistory.length > 0 ? epochHistory[0].mse : iterationHistory.length > 0 ? iterationHistory[0].globalMSEBefore : 0;
   const currentMSE = epochHistory.length > 0 ? epochHistory[epochHistory.length - 1].mse : iterationHistory.length > 0 ? iterationHistory[iterationHistory.length - 1].globalMSEAfter : 0;
@@ -287,203 +274,7 @@ export const ChartsSection: React.FC<ChartsSectionProps> = ({
           </div>
         </div>
 
-        {/* ================= CHART D: XOR DECISION BOUNDARY ================= */}
-        <div className="lg:col-span-2 bg-slate-50/80 rounded-xl p-5 border border-slate-200">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4 border-b border-slate-200/80 pb-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-800">
-                Gráfica D: Separación de XOR y Frontera de Decisión Real
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Plano cartesiano en espacio continuo [0, 1] × [0, 1] evaluado punto a punto por la red neuronal
-              </p>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-500">Resolución:</span>
-              <div className="inline-flex rounded-lg bg-slate-50 p-0.5 border border-slate-200">
-                {[25, 35, 50].map((res) => (
-                  <button
-                    key={res}
-                    onClick={() => setResolution(res)}
-                    className={`px-2 py-0.5 rounded text-[11px] font-mono ${
-                      resolution === res
-                        ? 'bg-blue-100 text-blue-700 font-bold border border-blue-300'
-                        : 'text-slate-500'
-                    }`}
-                  >
-                    {res}×{res}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
-            {/* Left: 2D Plane Visualization (7 cols) */}
-            <div className="md:col-span-7 flex flex-col items-center">
-              <div className="relative p-2 bg-slate-50/90 rounded-2xl border border-slate-200 shadow-sm">
-                <svg
-                  viewBox="-30 -30 380 380"
-                  className="w-full max-w-[360px] h-auto select-none"
-                >
-                  <defs>
-                    <radialGradient id="xorPointGrad0" cx="30%" cy="30%" r="70%">
-                      <stop offset="0%" stopColor="#dc2626" />
-                      <stop offset="100%" stopColor="#991b1b" />
-                    </radialGradient>
-                    <radialGradient id="xorPointGrad1" cx="30%" cy="30%" r="70%">
-                      <stop offset="0%" stopColor="#16a34a" />
-                      <stop offset="100%" stopColor="#166534" />
-                    </radialGradient>
-                  </defs>
-
-                  {/* Axes */}
-                  <line x1="0" y1="300" x2="310" y2="300" stroke="#64748b" strokeWidth="1.5" />
-                  <line x1="0" y1="300" x2="0" y2="-10" stroke="#64748b" strokeWidth="1.5" />
-
-                  {/* Grid of predictions */}
-                  {(() => {
-                    const cellSize = 300 / resolution;
-                    return decisionGrid.map((pt, i) => {
-                      const px = pt.x1 * 300;
-                      // Invert Y for SVG coordinates
-                      const py = 300 - pt.x2 * 300;
-
-                      // Color based on continuous sigmoid output (red -> yellow -> green/cyan)
-                      // Output is between 0 and 1
-                      const val = pt.output;
-                      const isClass1 = val >= 0.5;
-
-                      // Color interpolation
-                      const r = Math.round((1 - val) * 220);
-                      const g = Math.round(val * 200);
-                      const b = Math.round(val * 180 + (1 - val) * 40);
-
-                      return (
-                        <rect
-                          key={i}
-                          x={px - cellSize / 2}
-                          y={py - cellSize / 2}
-                          width={cellSize + 0.5}
-                          height={cellSize + 0.5}
-                          fill={`rgba(${r}, ${g}, ${b}, 0.55)`}
-                        />
-                      );
-                    });
-                  })()}
-
-                  {/* Axis labels */}
-                  <text x="315" y="304" fill="#475569" fontSize="11" fontWeight="bold">
-                    x₁
-                  </text>
-                  <text x="-5" y="-15" fill="#475569" fontSize="11" fontWeight="bold">
-                    x₂
-                  </text>
-
-                  {/* Axis tick labels */}
-                  <text x="0" y="318" fill="#64748b" fontSize="10" textAnchor="middle">
-                    0
-                  </text>
-                  <text x="300" y="318" fill="#64748b" fontSize="10" textAnchor="middle">
-                    1
-                  </text>
-                  <text x="-12" y="304" fill="#64748b" fontSize="10" textAnchor="end">
-                    0
-                  </text>
-                  <text x="-12" y="4" fill="#64748b" fontSize="10" textAnchor="end">
-                    1
-                  </text>
-
-                  {/* 4 XOR Truth Points */}
-                  {[
-                    { x1: 0, x2: 0, target: 0, label: '(0,0) → 0', px: 0, py: 300 },
-                    { x1: 0, x2: 1, target: 1, label: '(0,1) → 1', px: 0, py: 0 },
-                    { x1: 1, x2: 0, target: 1, label: '(1,0) → 1', px: 300, py: 300 },
-                    { x1: 1, x2: 1, target: 0, label: '(1,1) → 0', px: 300, py: 0 },
-                  ].map((pt) => {
-                    const is1 = pt.target === 1;
-                    return (
-                      <g key={pt.label} transform={`translate(${pt.px}, ${pt.py})`}>
-                        <circle
-                          r="11"
-                          fill={is1 ? 'url(#xorPointGrad1)' : 'url(#xorPointGrad0)'}
-                          stroke="#ffffff"
-                          strokeWidth="2"
-                          className="drop-shadow-sm"
-                        />
-                        <text
-                          x="0"
-                          y="4"
-                          textAnchor="middle"
-                          fill="#ffffff"
-                          fontSize="11"
-                          fontWeight="bold"
-                        >
-                          {pt.target}
-                        </text>
-                        {/* Label tag */}
-                        <rect
-                          x={pt.px > 150 ? -64 : 14}
-                          y={pt.py > 150 ? -24 : 10}
-                          width="52"
-                          height="18"
-                          rx="4"
-                          fill="#f8fafc"
-                          stroke="#cbd5e1"
-                          strokeWidth="1"
-                        />
-                        <text
-                          x={pt.px > 150 ? -38 : 40}
-                          y={pt.py > 150 ? -11 : 23}
-                          textAnchor="middle"
-                          fill="#0f172a"
-                          fontSize="9.5"
-                          fontFamily="monospace"
-                        >
-                          {pt.label}
-                        </text>
-                      </g>
-                    );
-                  })}
-                </svg>
-              </div>
-
-              {/* Color legend */}
-              <div className="flex items-center gap-4 mt-3 text-xs">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3.5 h-3.5 rounded-full bg-rose-600 border border-white"></span>
-                  <span className="text-slate-700">Clase 0 (y &lt; 0.5)</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3.5 h-3.5 rounded-full bg-emerald-600 border border-white"></span>
-                  <span className="text-slate-700">Clase 1 (y ≥ 0.5)</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Academic Theory Explanation (5 cols) */}
-            <div className="md:col-span-5 space-y-3 text-xs text-slate-700 leading-relaxed bg-slate-50/60 p-4 rounded-xl border border-slate-200">
-              <div className="flex items-center gap-2 text-blue-600 font-bold border-b border-slate-200 pb-2">
-                <Info className="w-4 h-4 flex-shrink-0" />
-                <span>¿Por qué XOR no es linealmente separable?</span>
-              </div>
-              <p>
-                En 1969, <strong>Marvin Minsky y Seymour Papert</strong> demostraron que un perceptrón simple de una sola capa solo es capaz de trazar <em>una única línea recta</em> como hiperplano de decisión.
-              </p>
-              <p>
-                Como se observa en el plano cartesiano, los puntos de la Clase 1: <span className="font-mono text-emerald-700">(0,1)</span> y <span className="font-mono text-emerald-700">(1,0)</span> están ubicados diagonalmente opuestos a los puntos de la Clase 0: <span className="font-mono text-rose-600">(0,0)</span> y <span className="font-mono text-rose-600">(1,1)</span>. No existe ninguna línea recta capaz de aislarlos sin error.
-              </p>
-              <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-[11px] space-y-1">
-                <p className="font-semibold text-indigo-700">Solución con Perceptrón Multicapa (MLP):</p>
-                <p className="text-slate-500">
-                  Las 2 neuronas de la capa oculta (<span className="font-mono text-blue-700">h₁</span> y <span className="font-mono text-blue-700">h₂</span>) aprenden dos hiperplanos independientes (análogos a las funciones OR y NAND). La neurona de salida (<span className="font-mono text-emerald-700">o₁</span>) combina linealmente esas representaciones intermedias, produciendo la frontera no lineal mostrada arriba.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
 };
-
